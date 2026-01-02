@@ -1,0 +1,296 @@
+lib/main.dartimport 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'IZI Study - Nemis tili',
+      theme: ThemeData(primarySwatch: Colors.orange, useMaterial3: true),
+      home: const HomePage(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class Word {
+  String german;
+  String uzbek;
+  String? example;
+  Word({required this.german, required this.uzbek, this.example});
+}
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  List<Word> words = [
+    Word(german: "Hallo", uzbek: "Salom", example: "Hallo! Wie geht es dir? - Salom! Qalaysiz?"),
+    Word(german: "Buch", uzbek: "Kitob", example: "Ich lese ein Buch. - Men kitob o'qiyman."),
+    Word(german: "Wasser", uzbek: "Suv", example: "Trink Wasser! - Suv iching!"),
+    Word(german: "Familie", uzbek: "Oila", example: "Meine Familie ist groß. - Mening oilam katta."),
+    Word(german: "Danke", uzbek: "Rahmat", example: "Vielen Dank! - Katta rahmat!"),
+    Word(german: "Bitte", uzbek: "Marhamat / Iltimos", example: "Bitte schön! - Marhamat!"),
+    Word(german: "Ja", uzbek: "Ha", example: "Ja, ich komme. - Ha, men kelaman."),
+    Word(german: "Nein", uzbek: "Yo'q", example: "Nein, danke. - Yo'q, rahmat."),
+  ];
+
+  int currentIndex = 0;
+  bool isFront = true;
+  FlutterTts flutterTts = FlutterTts();
+  late SharedPreferences prefs;
+
+  @override
+  void initState() {
+    super.initState();
+    initPrefs();
+    flutterTts.setLanguage("de-DE");
+    flutterTts.setSpeechRate(0.5);
+  }
+
+  Future<void> initPrefs() async {
+    prefs = await SharedPreferences.getInstance();
+    loadWords();
+  }
+
+  void loadWords() {
+    String? saved = prefs.getString('german_words');
+    if (saved != null) {
+      List<dynamic> list = jsonDecode(saved);
+      setState(() {
+        words = list.map((e) => Word(german: e['german'], uzbek: e['uzbek'], example: e['example'])).toList();
+      });
+    }
+  }
+
+  void saveWords() {
+    List<Map<String, dynamic>> list = words.map((e) => {'german': e.german, 'uzbek': e.uzbek, 'example': e.example}).toList();
+    prefs.setString('german_words', jsonEncode(list));
+  }
+
+  void speak(String text) async {
+    await flutterTts.speak(text);
+  }
+
+  void nextCard() {
+    setState(() {
+      currentIndex = (currentIndex + 1) % words.length;
+      isFront = true;
+    });
+  }
+
+  void addNewWord(String german, String uzbek, String? example) {
+    setState(() {
+      words.add(Word(german: german, uzbek: uzbek, example: example));
+    });
+    saveWords();
+  }
+
+  void startQuiz() {
+    showDialog(
+      context: context,
+      builder: (ctx) => QuizDialog(words: words),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('IZI Study - Nemis tili'),
+        backgroundColor: Colors.orange[700],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.quiz),
+            onPressed: startQuiz,
+            tooltip: "Test (Quiz)",
+          ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                isFront = !isFront;
+              });
+            },
+            child: Card(
+              elevation: 12,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              child: Container(
+                height: 480,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(25),
+                  gradient: LinearGradient(
+                    colors: [Colors.orange[100]!, Colors.yellow[100]!],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        isFront ? words[currentIndex].german : words[currentIndex].uzbek,
+                        style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (!isFront && words[currentIndex].example != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                          child: Text(
+                            words[currentIndex].example!,
+                            style: const TextStyle(fontSize: 20, fontStyle: FontStyle.italic, color: Colors.black87),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      const SizedBox(height: 40),
+                      IconButton(
+                        iconSize: 70,
+                        icon: const Icon(Icons.volume_up, color: Colors.orange),
+                        onPressed: () => speak(words[currentIndex].german),
+                      ),
+                      Text(
+                        isFront ? "Orqaga aylantirish uchun bosing" : "Nemischa talaffuzni eshiting",
+                        style: const TextStyle(color: Colors.grey, fontSize: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            backgroundColor: Colors.orange,
+            heroTag: "next",
+            onPressed: nextCard,
+            child: const Icon(Icons.arrow_forward),
+            tooltip: "Keyingi so'z",
+          ),
+          const SizedBox(width: 10),
+          FloatingActionButton(
+            backgroundColor: Colors.orange,
+            heroTag: "add",
+            onPressed: () => showAddDialog(context),
+            child: const Icon(Icons.add),
+            tooltip: "Yangi so'z qo'shish",
+          ),
+        ],
+      ),
+    );
+  }
+
+  void showAddDialog(BuildContext context) {
+    TextEditingController gerCtrl = TextEditingController();
+    TextEditingController uzCtrl = TextEditingController();
+    TextEditingController exCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Yangi nemischa so‘z qo‘shish"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: gerCtrl, decoration: const InputDecoration(labelText: "Nemischa so'z")),
+            TextField(controller: uzCtrl, decoration: const InputDecoration(labelText: "O'zbekcha tarjimasi")),
+            TextField(controller: exCtrl, decoration: const InputDecoration(labelText: "Misol jumla (ixtiyoriy)")),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Bekor qilish")),
+          ElevatedButton(
+            onPressed: () {
+              if (gerCtrl.text.isNotEmpty && uzCtrl.text.isNotEmpty) {
+                addNewWord(gerCtrl.text.trim(), uzCtrl.text.trim(), exCtrl.text.trim().isEmpty ? null : exCtrl.text.trim());
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text("Qo‘shish"),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class QuizDialog extends StatefulWidget {
+  final List<Word> words;
+  const QuizDialog({required this.words, super.key});
+
+  @override
+  State<QuizDialog> createState() => _QuizDialogState();
+}
+
+class _QuizDialogState extends State<QuizDialog> {
+  int currentQuiz = 0;
+  int score = 0;
+  String? selected;
+
+  List<Word> getShuffledOptions() {
+    List<Word> options = List.from(widget.words)..shuffle();
+    return options.take(4).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (currentQuiz >= 10) {
+      return AlertDialog(
+        title: const Text("Test tugadi! 🎉"),
+        content: Text("Natija: $score / 10"),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Yopish"))],
+      );
+    }
+
+    Word question = widget.words[currentQuiz % widget.words.length];
+    List<Word> options = getShuffledOptions();
+    if (!options.contains(question)) options[0] = question;
+
+    return AlertDialog(
+      title: Text("Savol \( {currentQuiz + 1}: \" \){question.german}\" ning ma’nosi nima?"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: options.map((opt) => RadioListTile<String>(
+          title: Text(opt.uzbek),
+          value: opt.uzbek,
+          groupValue: selected,
+          onChanged: (val) => setState(() => selected = val),
+        )).toList(),
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: selected == null ? null : () {
+            if (selected == question.uzbek) score++;
+            setState(() {
+              selected = null;
+              currentQuiz++;
+            });
+          },
+          child: const Text("Keyingi savol"),
+        ),
+      ],
+    );
+  }
+}
+}
